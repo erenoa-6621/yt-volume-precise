@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "fixture bad host",
+  "version": "0.0.1",
+  "permissions": ["storage"],
+  "host_permissions": ["*://www.youtube.com/*", "*://*.example.com/*"],
+  "content_scripts": [
+    { "matches": ["*://www.youtube.com/*"], "js": ["app/content.js"] }
+  ],
+  "action": { "default_popup": "app/popup.html" }
+}

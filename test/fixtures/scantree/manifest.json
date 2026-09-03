@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "fixture scantree",
+  "version": "0.0.1",
+  "permissions": ["storage"],
+  "host_permissions": ["*://www.youtube.com/*"],
+  "content_scripts": [
+    { "matches": ["*://www.youtube.com/*"], "js": ["src/app.js"] }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["assets/blob.bin"], "matches": ["*://www.youtube.com/*"] }
+  ]
+}

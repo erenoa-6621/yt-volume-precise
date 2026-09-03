@@ -1,0 +1,629 @@
+/* YT Volume Precise — プレーヤー内オーバーレイ
+   YouTube 赤（#FF0000 系）は使わない。公式と誤認させないため。
+
+   ── v0.8：YouTube の中で異物に見えないようにする ──
+   実機報告「design が浮いて見える」に対する作り直し。従うのは好みではなく、
+   YouTube 自身の www-player.css から取った次の事実だけ。
+
+     .html5-video-player … フォントの実体は "YouTube Noto"／Roboto／Arial …、font-size は 11px
+     .ytp-button ………… border:none / background-color:transparent / padding:0 と、
+                          color も font も font-size(100%) も **すべて inherit**
+     .ytp-chrome-bottom … height: 48px
+
+   つまり **YouTube 自身のボタンは、字も色も自分では決めずに継承している。**
+
+   ここから来る3つの方針:
+     1. **フォントの実体をこのファイルで宣言しない。** プレーヤーから継承する。
+        YouTube がフォントを変えても、日本語環境で別の実体が当たっても自動で追随する。
+        入力欄・ボタンは既定では継承しないので、その2つだけ `font: inherit` で継承へ戻す。
+     2. **文字寸法は継承した 11px に対する相対で組む。** .ytvp-root の 1.18em ＝ 約 13px で、
+        これは YouTube の設定メニューの本文と同じ大きさ。以下は全部この 13px に対する em。
+     3. **色を持たない。** YouTube のプレーヤー UI は白と黒だけで、色は進行バーの赤しかない。
+        v0.7 までの独自のアクセント2色（ミントとアンバー）は撤回した。100 超えの警告色も
+        やめている（100 を超えたことは数字そのものが示し、ブーストの ON/OFF はトグルが示す）。 */
+
+:root {
+  /* 不透明の地。ポップアップ（プレーヤーの無い文書）の背景に使う */
+  --ytvp-bg: #0f0f0f;
+  /* パネルの地。YouTube の設定メニューと同じ「青みの無い黒の半透明」 */
+  --ytvp-surface: rgba(28, 28, 28, 0.9);
+  --ytvp-line: rgba(255, 255, 255, 0.2);
+  --ytvp-text: #fff;
+  --ytvp-muted: rgba(255, 255, 255, 0.7);
+  /* 選択・ホバーの塗り。色ではなく白の半透明で示す（YouTube の作法） */
+  --ytvp-fill: rgba(255, 255, 255, 0.1);
+  --ytvp-fill-on: rgba(255, 255, 255, 0.25);
+  --ytvp-radius: 12px;
+  --ytvp-row: 40px;
+  --ytvp-speed: 120ms;
+  /* 映像の上でも読めるように。YouTube のコントロール文字と同じ性質の影 */
+  --ytvp-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* 明るいテーマ用の色は持たない。YouTube のプレーヤー UI は、ページが明るいテーマでも
+   常に暗いまま（映像の上に置くものなので）。パネルはその作法に合わせる。 */
+
+.ytvp-root {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  /* 継承した 11px に対する相対。約 13px＝YouTube の設定メニュー本文と同じ */
+  font-size: 1.18em;
+  color: var(--ytvp-text);
+  text-shadow: var(--ytvp-shadow);
+  /* 現在値の色。白のまま。ミュートのときだけ弱める（色相は変えない） */
+  --ytvp-active: var(--ytvp-text);
+}
+
+.ytvp-root.ytvp-fixed {
+  position: fixed;
+}
+
+/* .ytvp-is-boosted は JS が付け続けるが、見た目は変えない。
+   100 超えを別の色で警告するのは YouTube の言語に無く、一番浮いていた（v0.8 で撤回）。 */
+
+.ytvp-root.ytvp-is-muted {
+  --ytvp-active: var(--ytvp-muted);
+}
+
+/* ── 折りたたみ時のハンドル（既定はこれだけ） ── */
+.ytvp-handle {
+  min-width: 44px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ytvp-line);
+  border-radius: 8px;
+  background: rgba(28, 28, 28, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ytvp-text);
+  /* ボタンは既定でフォントを継承しない。継承へ戻す（実体は宣言しない） */
+  font: inherit;
+  font-size: 0.92em;
+  line-height: 1;
+  text-shadow: var(--ytvp-shadow);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity var(--ytvp-speed) ease, background var(--ytvp-speed) ease;
+}
+
+.ytvp-handle:hover,
+.ytvp-handle:focus-visible {
+  opacity: 1;
+  background: rgba(28, 28, 28, 0.95);
+  outline: none;
+}
+
+.ytvp-handle__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ytvp-active);
+}
+
+.ytvp-handle__value::after {
+  content: "%";
+  color: var(--ytvp-muted);
+  margin-left: 1px;
+}
+
+/* ── ネイティブ統合（プレーヤーのコントロール列に差し込むボタン） ──
+   借りるのは位置と余白だけ。ただし .ytp-button は line-height も継承させるので、
+   数字を入れると 48px の行高を拾って潰れる。line-height だけは自前で持つ。
+   セレクタは 2 クラスで書く。1 クラスのままだと、どちらのスタイルシートが
+   後に来るかでプレーヤー側に負けることがある（読み込み順に依存させない）。 */
+.ytp-button.ytvp-native-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 40px;
+  height: 100%;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  opacity: 0.92;
+  vertical-align: top;
+  cursor: pointer;
+  /* 11px を継承した上での 118%＝約 13px。YouTube の再生時間表示と同じ大きさ。
+     フォントの実体は宣言しない（.ytp-button が inherit なので、そのまま継承される） */
+  font-size: 118%;
+  line-height: 1;
+  color: var(--ytvp-text);
+  text-align: center;
+  text-shadow: var(--ytvp-shadow);
+  transition: opacity var(--ytvp-speed) ease;
+}
+
+.ytp-button.ytvp-native-btn:hover,
+.ytp-button.ytvp-native-btn:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.ytp-button.ytvp-native-btn:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--ytvp-line);
+}
+
+.ytvp-native-btn__value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* .ytvp-native-btn--boost には見た目を持たせない（警告色の撤回。上の方針3）。 */
+
+.ytp-button.ytvp-native-btn--muted {
+  color: var(--ytvp-muted);
+}
+
+/* ボタンの直後に挿す位置決めの箱。幅を持たず、パネルの原点だけを提供する。
+   .ytvp-root の絶対配置（top/right）をここで打ち消す。 */
+.ytvp-root.ytvp-native {
+  position: relative;
+  top: auto;
+  right: auto;
+  display: inline-block;
+  width: 0;
+  height: 100%;
+  min-height: 36px;
+  vertical-align: top;
+  pointer-events: none;
+}
+
+/* パネルはボタンの上に開く。右寄せにしてプレーヤーの外へはみ出させない。
+   隙間は 8px では足りない。YouTube はコントロールバーにポインタが乗ると
+   シークバーの当たり判定を上へ広げるので、8px しか空けないとパネル下端の
+   ボタンと押し合いになる（実機報告）。14px 空けて逃がす。 */
+.ytvp-root.ytvp-native > .ytvp-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+  pointer-events: auto;
+}
+
+/* ── 展開パネル ──
+   YouTube の設定メニューに合わせる: 青みの無い黒の半透明・角丸 12px・枠線なし。 */
+.ytvp-panel {
+  width: 220px;
+  /* 下だけ厚くする。パネルは上へ開くので**下端がシークバーに最も近い**。
+     いま下端に来るのはブーストの行（設定欄と注記は既定で hidden）なので、
+     内側にも逃げ幅を持たせて、押す面とシークバーを離す。 */
+  padding: 8px 10px 16px;
+  border: 0;
+  border-radius: var(--ytvp-radius);
+  background: var(--ytvp-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ytvp-panel[hidden] {
+  display: none;
+}
+
+/* 行は一定の高さで、ラベル左・値/操作右（YouTube の設定メニューの構成） */
+.ytvp-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  min-height: var(--ytvp-row);
+}
+
+/* 現在値は「読むもの」ではなく「打ち込むもの」（SPEC 10-a）。
+   枠・背景・スピナーを全部落として、フォーカス時だけ下線を出す。下線は常に 1px
+   確保しておき、フォーカスで太さが変わって数字が跳ねないようにする。
+   v0.7 の 30px は、11px 基準のプレーヤーの中では大きすぎた（一番目立つ異物）。
+   1.62em ≒ 21px まで落とす。主役ではあるが、YouTube の文字寸法の連続に収まる。
+   入力欄は既定でフォントを継承しないので `font: inherit` で継承へ戻す
+   （実体を宣言しない＝プレーヤーのフォントがそのまま来る）。 */
+.ytvp-value {
+  box-sizing: border-box;
+  width: 3.4ch;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  font-size: 1.62em;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ytvp-active);
+  caret-color: var(--ytvp-active);
+  text-align: left;
+  text-shadow: var(--ytvp-shadow);
+  /* YouTube のコントロールバーは選択を防ぐために user-select:none を配る。
+     その内側に置いた入力欄が継承すると、文字を選べない／掴めない入力欄になる。
+     入力欄だけを text に戻す（パネル全体を戻すと、余白のドラッグで周囲の文字まで拾う）。 */
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+  transition: border-color var(--ytvp-speed) ease;
+}
+
+/* 編集中と分かる控えめな表示。枠で囲わない（SPEC 6 の見た目を変えないため） */
+.ytvp-value:focus,
+.ytvp-value:focus-visible {
+  outline: none;
+  border-bottom-color: var(--ytvp-text);
+}
+
+/* 塞ぐのはプレーヤーが居ないとき（available:false）だけ。スライダーと同じ扱い。 */
+.ytvp-value:disabled {
+  cursor: default;
+  opacity: 0.5;
+  color: var(--ytvp-muted);
+}
+
+.ytvp-unit {
+  font-size: 0.92em;
+  color: var(--ytvp-muted);
+}
+
+.ytvp-state {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: var(--ytvp-muted);
+}
+
+/* ── スライダー ──
+   YouTube の音量スライダーと同じ作り: 細い白の半透明の溝＋白い丸のつまみ。 */
+.ytvp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  margin: 0;
+  border-radius: 2px;
+  background: var(--ytvp-line);
+  cursor: pointer;
+}
+
+.ytvp-range:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ytvp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ytvp-active);
+}
+
+.ytvp-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ytvp-active);
+}
+
+.ytvp-range:focus-visible {
+  outline: 1px solid var(--ytvp-line);
+  outline-offset: 3px;
+}
+
+/* ── プリセット pill ──
+   文字は白。選ばれているものは色の塗りではなく、白の半透明で示す。 */
+.ytvp-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 2px 0;
+}
+
+.ytvp-pill {
+  padding: 3px 9px;
+  border: 1px solid var(--ytvp-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ytvp-text);
+  font: inherit;
+  font-size: 0.92em;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  text-shadow: var(--ytvp-shadow);
+  opacity: 0.85;
+  cursor: pointer;
+  transition: background var(--ytvp-speed) ease, opacity var(--ytvp-speed) ease;
+}
+
+.ytvp-pill:hover,
+.ytvp-pill:focus-visible {
+  background: var(--ytvp-fill);
+  opacity: 1;
+  outline: none;
+}
+
+/* 現在値と一致するものだけ塗る（控えめな白の半透明） */
+.ytvp-pill--on {
+  background: var(--ytvp-fill-on);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: var(--ytvp-text);
+  opacity: 1;
+}
+
+/* ── ブースト（ラベル左・トグル右の行） ──
+   YouTube の設定メニューの ON/OFF は、文字ではなく白いつまみのトグルで示される。
+   v0.7 の「ブースト OFF」という文字ボタンをやめ、その記号に合わせた。
+   ON/OFF の文字は読み上げのために残す（下の .ytvp-boost__val）。 */
+.ytvp-boost {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--ytvp-row);
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ytvp-text);
+  font: inherit;
+  font-size: 1em;
+  text-align: left;
+  text-shadow: var(--ytvp-shadow);
+  cursor: pointer;
+  transition: background var(--ytvp-speed) ease;
+}
+
+.ytvp-boost:hover,
+.ytvp-boost:focus-visible {
+  background: var(--ytvp-fill);
+  outline: none;
+}
+
+.ytvp-boost__label {
+  flex: 1 1 auto;
+}
+
+/* トグルの溝。ON でも色相は変えず、白の濃さとつまみの位置で示す
+   （進行バー以外に色を持たないため）。 */
+.ytvp-boost__switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.3);
+  transition: background var(--ytvp-speed) ease;
+}
+
+.ytvp-boost__thumb {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform var(--ytvp-speed) ease;
+}
+
+.ytvp-boost--on .ytvp-boost__switch {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.ytvp-boost--on .ytvp-boost__thumb {
+  transform: translateX(16px);
+}
+
+/* ON/OFF は、目にはつまみの位置で見える（色に依存しない）。
+   文字は読み上げのためだけに残し、画面からは外す。消してしまうと
+   スクリーンリーダーに状態が届く経路が aria-pressed だけになる。 */
+.ytvp-boost__val {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 塞ぐのはオフラインのときだけ（SPEC 3-d）。boostAllowed では塞がない。 */
+.ytvp-boost:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ── ⚙ 設定（段階的開示）──
+   常時見せるのは操作の道具（数値・スライダー・pill・ブースト）だけ。設定は
+   ⚙ の中に畳んでおく。別の場所（ポップアップ）へ飛ばさないのが要点で、
+   Chrome は拡張アイコンを既定でツールバーに出さないため、飛ばした先は
+   多くの人にとって存在しないのと同じになる。 */
+.ytvp-gear {
+  /* 置き場所は readout（数値の行）の右端。親は align-items:baseline の
+     横並びなので、ここは自分で縦中央に置く（baseline に乗せるとアイコンが沈む）。
+     直前の .ytvp-state が margin-left:auto を持つので、右端寄せはそれで決まる。 */
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: 4px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  /* 無彩色。YouTube のコントロールのアイコンと同じ白で、既定は少し落とす */
+  color: var(--ytvp-text);
+  font: inherit;
+  font-size: 1.15em;
+  line-height: 1;
+  text-shadow: var(--ytvp-shadow);
+  opacity: 0.75;
+  cursor: pointer;
+  transition: opacity var(--ytvp-speed) ease, background var(--ytvp-speed) ease;
+}
+
+.ytvp-gear:hover,
+.ytvp-gear:focus-visible {
+  opacity: 1;
+  background: var(--ytvp-fill);
+  outline: none;
+}
+
+.ytvp-gear--on {
+  opacity: 1;
+  background: var(--ytvp-fill-on);
+}
+
+.ytvp-gear__icon {
+  pointer-events: none;
+}
+
+.ytvp-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ytvp-line);
+}
+
+/* hidden 属性が display:flex に負けないよう明示する（属性だけでは消えない） */
+.ytvp-settings[hidden] {
+  display: none;
+}
+
+/* ⚙ は最上段（readout の右端）、開く先の編集欄は最下段にある。押した場所と
+   開いた場所が離れているので、開いている間だけ編集欄に ⚙ の ON と同じ地色を
+   敷いて、どのボタンが何を開いたのかを目で結べるようにする。
+   色だけに頼らせない: ⚙ 側は地色も、編集欄側は上の区切り線も同時に変わる。 */
+.ytvp-panel--settings > .ytvp-settings {
+  margin: 0 -6px -6px;
+  padding: 8px 6px 6px;
+  border-top-color: rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  background: var(--ytvp-fill);
+}
+
+.ytvp-settings__label {
+  font-size: 0.85em;
+  line-height: 1.4;
+  color: var(--ytvp-muted);
+}
+
+.ytvp-settings__row {
+  display: flex;
+  gap: 6px;
+}
+
+.ytvp-preset-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid var(--ytvp-line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--ytvp-text);
+  font: inherit;
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ytvp-preset-input:focus,
+.ytvp-preset-input:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.ytvp-preset-apply {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--ytvp-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ytvp-text);
+  font: inherit;
+  font-size: 0.92em;
+  text-shadow: var(--ytvp-shadow);
+  cursor: pointer;
+  transition: background var(--ytvp-speed) ease;
+}
+
+.ytvp-preset-apply:hover,
+.ytvp-preset-apply:focus-visible {
+  background: var(--ytvp-fill);
+  outline: none;
+}
+
+/* ── 初回に一度だけ出す、触るきっかけ ──
+   拡張は「使い方を読んでから入れる」ものではなく「入れて触りながら分かる」もの。
+   最初の1回だけ、どこを押せばいいかを短く出す。クリックの邪魔をしないよう
+   pointer-events は殺す。 */
+.ytvp-hint {
+  max-width: 200px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ytvp-surface);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  color: var(--ytvp-text);
+  font-size: 0.92em;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ytvp-hint[hidden] {
+  display: none;
+}
+
+/* ネイティブモードの root は幅0の位置決め箱なので、ヒントは絶対配置で
+   ボタンの上に浮かせる（パネルと同じ寄せ方）。 */
+.ytvp-root.ytvp-native > .ytvp-hint {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+}
+
+.ytvp-note {
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--ytvp-muted);
+}
+
+.ytvp-note[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ytvp-root {
+    --ytvp-speed: 0ms;
+  }
+  .ytvp-handle,
+  .ytp-button.ytvp-native-btn,
+  .ytvp-value,
+  .ytvp-pill,
+  .ytvp-boost,
+  .ytvp-boost__switch,
+  .ytvp-boost__thumb,
+  .ytvp-gear,
+  .ytvp-preset-apply {
+    transition: none;
+  }
+}

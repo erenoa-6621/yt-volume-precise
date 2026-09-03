@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "fixture bad unknown key",
+  "version": "0.0.1",
+  "permissions": ["storage"],
+  "host_permissions": ["*://www.youtube.com/*"],
+  "content_scripts": [
+    { "matches": ["*://www.youtube.com/*"], "js": ["app/content.js"] }
+  ],
+  "action": { "default_popup": "app/popup.html" },
+  "ytvp_flux_capacitor": { "jigowatts": 1.21 }
+}

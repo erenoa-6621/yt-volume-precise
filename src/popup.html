@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>YT Volume Precise</title>
+<!-- パネルの見た目は overlay.css が唯一の出どころ。popup.css は「320px の別文書」という
+     前提の差だけを吸収する（順序が意味を持つので overlay.css を先に読む）。 -->
+<link rel="stylesheet" href="overlay.css">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<!-- ポップアップは自前の UI を持たない。数値入力・スライダー・プリセット pill・
+     ブースト・⚙ の設定はすべて overlay.js が描く（プレイヤー内パネルと同じ部品）。
+     ここに個別のマークアップを置くと、また「片方にしか無い機能」が生まれる。
+
+     マウント先は overlay.js が自分で選ぶ（#movie_player が無ければ document.body）。
+     この文書には #movie_player が無いので、パネルはこの body 直下に生える。
+     popup 側から器を指定する口は overlay.js に無い（options に host は無い）。 -->
+<p class="ytvp-popup-msg" id="ytvp-msg" role="status" hidden></p>
+<script src="lib/volume.js"></script>
+<script src="overlay.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

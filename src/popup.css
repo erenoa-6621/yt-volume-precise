@@ -1,0 +1,88 @@
+/* YT Volume Precise — ポップアップ
+   YouTube 赤（#FF0000 系）は使わない。公式と誤認させないため。
+
+   ポップアップは「プレイヤー内パネルと同じ部品を別の文書に載せるための器」であり、
+   自前の UI を持たない。色・寸法・部品の見た目の出どころは overlay.css ただ一つ
+   （--ytvp-bg などのトークンも overlay.css の :root が持つ。ここでは複製しない。
+   複製すると片方だけ直したときに黙ってズレる）。
+
+   このファイルが吸収するのは「プレイヤー内と違う前提」だけ、次の4点。
+     0. フォントと基準寸法 …… overlay.css はフォントの実体を宣言せず、プレーヤー
+                     （.html5-video-player = "YouTube Noto"/11px）から継承する。
+                     ポップアップにはプレーヤーが居ないので、その環境をここで再現する。
+                     同じ実体・同じ 11px を置くことで、パネルはプレイヤー内と同じ寸法で出る。
+     1. position …… プレイヤー内は absolute / fixed で浮かせる。ポップアップは
+                     窓そのものが器なので浮かせない。
+     2. 幅 …………… パネルは 220px 固定（プレイヤーの上に小さく出すため）。
+                     ポップアップは 320px の文書いっぱいに使う。
+     3. 開閉 ……… プレイヤー内はホバー/クリックで開く。ポップアップは開いた状態しか
+                     存在しないので、常に開いておきハンドル（開閉ボタン）は出さない。 */
+
+* { box-sizing: border-box; }
+
+/* 0. YouTube のプレーヤーと同じフォント指定・同じ基準寸法（11px）を置く。
+      この2行だけが overlay.css の「継承で決まる部分」の代わりであり、
+      ここ以外に文字の実体を書かない（書くと2箇所になり、片方だけ古くなる）。 */
+body {
+  width: 320px;
+  margin: 0;
+  padding: 8px;
+  background: var(--ytvp-bg);
+  color: var(--ytvp-text);
+  font-family: "YouTube Noto", Roboto, Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  color-scheme: dark;
+}
+
+/* 1. 浮かせない。overlay は #movie_player が無い文書では body 直下へ入り
+      .ytvp-fixed（position: fixed）が付く。ここでは文書の流れに戻す。 */
+.ytvp-root,
+.ytvp-root.ytvp-fixed {
+  position: static;
+  align-items: stretch;
+  gap: 0;
+}
+
+/* 3. 折りたたみ用のハンドルはプレイヤー内の作法。ポップアップには畳んだ状態が無い。 */
+.ytvp-handle {
+  display: none;
+}
+
+/* 3. パネルは常に開く。overlay が付ける hidden 属性（＝開閉）に勝たせる。
+      ⚙ の設定欄（.ytvp-settings[hidden]）はここでは打ち消さない。段階的開示は
+      ポップアップでもそのまま動いてよい（＝パネルと同じ操作体系）。
+   2. 幅は文書いっぱい。プレイヤーの上に浮かせるための影・ぼかしも要らない。 */
+.ytvp-panel,
+.ytvp-panel[hidden] {
+  display: flex;
+  width: 100%;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ── 案内文（ポップアップに残る唯一の自前 UI） ── */
+.ytvp-popup-msg {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ytvp-line);
+  border-radius: 8px;
+  font-size: 1.09em;
+  line-height: 1.5;
+  color: var(--ytvp-muted);
+}
+
+.ytvp-popup-msg[hidden] {
+  display: none;
+}
+
+/* オフラインではパネルを畳む（popup.js が destroy する）。畳む前の一瞬や、
+   万一パネルが残った場合にも触れないようにしておく。 */
+body.is-offline .ytvp-root {
+  opacity: 0.45;
+  pointer-events: none;
+}

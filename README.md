@@ -156,6 +156,7 @@ bash verify.sh | grep -E '^\[(OK|NG)\] '
 | [SPEC.md](SPEC.md) | 契約（API の署名・メッセージ形状・UI 指針・改訂の経緯） |
 | [INSTALL.md](INSTALL.md) | 導入手順と、動作確認のチェックリスト |
 | [KNOWN_GAPS.md](KNOWN_GAPS.md) | 既知の穴の在庫（正直な一覧） |
+| [PRIVACY.md](PRIVACY.md) | プライバシーポリシー（何も集めず、何も送らない） |
 | `verify.sh` | 全検査の入口 |
 | `src/` | 拡張の実体（`content.js` / `page.js` / `overlay.js` / `popup.js` / `lib/volume.js`） |
 | `test/` | Node のテストと、わざと壊した検体 |
